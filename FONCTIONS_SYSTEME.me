@@ -1,0 +1,92 @@
+ERPGo SaaS — Fonctions système (vue d’ensemble)
+
+1) Architecture technique
+- Framework: Laravel 11 (voir composer.json).
+- Découpage: logique MVC classique (app/Http/Controllers, app/Models, resources/views).
+- Modules: support “Modules/” via nwidart/laravel-modules (ex: Modules/LandingPage).
+
+2) Points d’entrée (routing)
+- Web: routes/web.php (routes applicatives principales, ressources et paiements).
+- Auth: routes/auth.php (login, register, reset, email verification, logout).
+- API: routes/api.php (endpoints API, si utilisés par le front/intégrations).
+
+3) Authentification & sessions
+- Contrôleurs d’auth: app/Http/Controllers/Auth/* (login/register/reset/verification).
+- Vérification email: routes/auth.php utilise signed + throttle pour /verify/{id}/{hash}.
+- Tokens API: Laravel Sanctum est activé via HasApiTokens dans app/Models/User.php.
+
+4) Multi-entreprise (tenant) & cloisonnement des données
+- Principe: la majorité des entités sont filtrées par created_by (créateur/entreprise).
+- Règle: app/Models/User.php::creatorId()
+  - type = company ou super admin => creatorId = id
+  - sinon => creatorId = created_by
+- Exemple de scoping: app/Http/Controllers/PaymentController.php filtre Payment, Vender, BankAccount, etc. par creatorId().
+
+5) Rôles & permissions
+- Gestion RBAC: spatie/laravel-permission (voir composer.json).
+- Contrôleurs: app/Http/Controllers/RoleController.php, app/Http/Controllers/PermissionController.php.
+- Contrôle d’accès: la majorité des actions vérifient \Auth::user()->can('...') avant d’exécuter.
+
+6) Paramètres système / configuration applicative
+- Stockage des settings: table “settings” manipulée via app/Models/Utility.php (Utility::settings / settingsById).
+- Écran settings (super admin/entreprise): app/Http/Controllers/SystemController.php
+  - Branding (logos, favicon), paramètres UI (RTL, couleurs, landing page, signup, etc.)
+  - Paramètres email (SMTP) admin et entreprise
+  - Paramètres “company settings” (ex: IP restrict, infos société)
+
+7) Middleware “XSS” (en pratique: initialisation contexte + mise à jour)
+- Middleware: app/Http/Middleware/XSS.php
+  - Charge les settings du tenant, applique timezone et locale
+  - Côté super admin: détecte migrations en attente, initialise des données, redirige vers l’updater si nécessaire
+
+8) Plans / Abonnements / Activation des modules
+- Modèle: app/Models/Plan.php
+  - Limites: max_users, max_customers, max_venders, max_clients, storage_limit
+  - Flags de modules: crm, hrm, account, project, pos, production, integrations, sales, wms, mrp, quality, maintenance, enterprise_accounting, approvals, hr_ops, saas, chatgpt
+- Gating côté applicatif: app/Models/User.php
+  - User::show_crm(), show_hrm(), show_account(), show_project(), show_pos(), show_production()
+  - Ces méthodes lisent le plan de l’entreprise et renvoient l’état du module.
+- Administration des plans: app/Http/Controllers/PlanController.php
+  - Active/désactive les modules via enable_* dans les formulaires (ex: enable_production).
+- Données par défaut: database/seeders/PlansTableSeeder.php (plans d’exemple et flags).
+
+9) Paiements (2 usages distincts)
+9.1 Paiement des factures (clients)
+- Déclenché depuis routes/web.php (ex: customer.pay.with.paypal, customer.paystack, etc.).
+- Contrôleurs dédiés: PaypalController, PaystackPaymentController, StripePaymentController, MolliePaymentController, RazorpayPaymentController, etc.
+
+9.2 Paiement d’un plan (abonnement entreprise)
+- Routes “plan.*” dans routes/web.php (ex: plan.pay.with.paytm, plan.pay.with.mollie, plan.pay.with.coingate, etc.).
+- Logique d’order/abonnement: contrôleurs de gateway (ex: app/Http/Controllers/StripePaymentController.php) créent/valident un Order et assignent le plan à l’entreprise.
+
+10) Stockage fichiers & limites
+- Uploads: app/Models/Utility.php (upload_file, updateStorageLimit).
+- Servir fichiers uploadés: route storage/uploads/{path} dans routes/web.php
+  - Inclut une protection contre le path traversal.
+- Backends: settings “storage_setting” (local/S3/Wasabi) définis dans Utility::settings().
+
+11) Modules métier principaux (indications par contrôleurs/modèles)
+- CRM: Leads/Deals/Pipelines/Stages (ex: LeadController, DealController, PipelineController, StageController; modèles Lead, Deal, Pipeline, etc.).
+- HRM: Employés/présence/congés/paie/formation (ex: EmployeeController, AttendanceEmployeeController, LeaveController, PaySlipController, TrainingController; modèles Employee, Holiday, Leave, etc.).
+- Comptabilité & ventes: Devis/Factures/Achats/Dépenses/Journaux (ex: InvoiceController, QuotationController, PurchaseController, ExpenseController, JournalEntryController; modèles Invoice, Bill, Expense, JournalEntry, etc.).
+- Projets: Projets/tâches/temps (ProjectController, ProjectTaskController, TimesheetController, TimeTrackerController; modèles Project, ProjectTask, Timesheet).
+- POS & stock: PosController, WarehouseController, ProductStockController; modèles ProductStock, Warehouse, etc.
+- Production: ProductionBomController, ProductionOrderController, ProductionWorkCenterController (fonctionnalités liées au flag plan “production”).
+
+12) Notifications & intégrations
+- Email templates: app/Models/User.php::defaultEmail() + modèles EmailTemplate.
+- Slack/Telegram/Twilio: paramètres dans Utility::settings(), envoi via Utility (ex: Utility::send_twilio_msg, send_slack_msg, send_telegram_msg).
+- Google Calendar: spatie/laravel-google-calendar (Utility utilise Spatie\GoogleCalendar\Event).
+- Chat interne: munafio/chatify (dépendance composer).
+- IA: orhanerday/open-ai (clé et modèle stockés en settings).
+
+13) Installation & mise à jour
+- Installer: rachidlaasri/laravel-installer (dépendance composer).
+- Updater: redirection possible depuis le middleware XSS si migrations en attente (route LaravelUpdater::welcome).
+
+14) Où commencer pour naviguer dans le code
+- Routes: routes/web.php et routes/auth.php.
+- Paramètres/Helpers transverses: app/Models/Utility.php.
+- Tenancy: app/Models/User.php (creatorId + show_*).
+- Plans: app/Models/Plan.php et app/Http/Controllers/PlanController.php.
+- Settings: app/Http/Controllers/SystemController.php.

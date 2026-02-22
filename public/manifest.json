@@ -1,0 +1,69 @@
+{
+    "name": "ERPGo SaaS - Business ERP",
+    "short_name": "ERPGo",
+    "description": "All-in-One Business ERP with Project, Account, HRM & CRM",
+    "start_url": "/dashboard",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "portrait-primary",
+    "background_color": "#ffffff",
+    "theme_color": "#6FD943",
+    "icons": [
+        {
+            "src": "/favicon.ico",
+            "sizes": "64x64 32x32 24x24 16x16",
+            "type": "image/x-icon",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/assets/img/logo.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/assets/img/logo.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "categories": [
+        "business",
+        "productivity"
+    ],
+    "lang": "en",
+    "prefer_related_applications": false,
+    "shortcuts": [
+        {
+            "name": "Dashboard",
+            "short_name": "Dashboard",
+            "description": "View your dashboard",
+            "url": "/dashboard",
+            "icons": [{ "src": "/favicon.ico", "sizes": "96x96" }]
+        },
+        {
+            "name": "New Invoice",
+            "short_name": "Invoice",
+            "description": "Create new invoice",
+            "url": "/invoice/create",
+            "icons": [{ "src": "/favicon.ico", "sizes": "96x96" }]
+        },
+        {
+            "name": "Employees",
+            "short_name": "Employees",
+            "description": "Manage employees",
+            "url": "/employee",
+            "icons": [{ "src": "/favicon.ico", "sizes": "96x96" }]
+        }
+    ],
+    "share_target": {
+        "action": "/share",
+        "method": "GET",
+        "params": {
+            "title": "title",
+            "text": "text",
+            "url": "url"
+        }
+    }
+}
