@@ -1,5 +1,6 @@
     {{Form::model($plan, array('route' => array('plans.update', $plan->id), 'method' => 'PUT', 'enctype' => "multipart/form-data", 'class'=>'needs-validation', 'novalidate')) }}
     <div class="modal-body">
+        <div id="collab-indicator" class="collab-indicator mb-3" data-collab-resource="plan" data-collab-id="{{ $plan->id }}" data-collab-label="{{ $plan->name }}"></div>
         {{-- start for ai module--}}
         @php
             $settings = \App\Models\Utility::settings();

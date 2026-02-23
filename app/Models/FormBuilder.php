@@ -23,7 +23,7 @@ class FormBuilder extends Model
 
     public function form_field()
     {
-        return $this->hasMany('App\Models\FormField', 'form_id', 'id');
+        return $this->hasMany('App\Models\FormField', 'form_id', 'id')->orderBy('order')->orderBy('id');
     }
 
     public function fieldResponse()

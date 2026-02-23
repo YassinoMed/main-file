@@ -2,8 +2,42 @@
 @section('page-title')
     {{ $formBuilder->name.__("'s Form Field") }}
 @endsection
+@push('css-page')
+    <link rel="stylesheet" href="{{ asset('assets/css/plugins/dragula.min.css') }}">
+@endpush
 @push('script-page')
+    <script src="{{ asset('assets/js/plugins/dragula.min.js') }}"></script>
+    <script>
+        (function () {
+            var tableBody = document.getElementById('form-field-list');
+            if (!tableBody || typeof dragula === 'undefined') {
+                return;
+            }
 
+            var drake = dragula([tableBody], {
+                moves: function (el, container, handle) {
+                    return handle && handle.classList.contains('form-field-handle');
+                }
+            });
+
+            drake.on('drop', function () {
+                var order = [];
+                var rows = tableBody.querySelectorAll('tr[data-id]');
+                rows.forEach(function (row) {
+                    order.push(row.getAttribute('data-id'));
+                });
+
+                $.ajax({
+                    url: '{{ route('form.field.order', $formBuilder->id) }}',
+                    type: 'POST',
+                    data: {
+                        order: order,
+                        "_token": $('meta[name="csrf-token"]').attr('content')
+                    }
+                });
+            });
+        })();
+    </script>
 @endpush
 @section('breadcrumb')
     <li class="breadcrumb-item"><a href="{{route('dashboard')}}">{{__('Dashboard')}}</a></li>
@@ -29,15 +63,17 @@
                         <table class="table datatable">
                             <thead>
                             <tr>
+                                <th width="40"></th>
                                 <th>{{__('Name')}}</th>
                                 <th>{{__('Type')}}</th>
                                 <th class="text-end" width="200px">{{__('Action')}}</th>
                             </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="form-field-list">
                             @if($formBuilder->form_field->count())
                                 @foreach ($formBuilder->form_field as $field)
-                                    <tr>
+                                    <tr data-id="{{ $field->id }}">
+                                        <td><i class="ti ti-grip-vertical form-field-handle"></i></td>
                                         <td>{{ $field->name }}</td>
                                         <td>{{ ucfirst($field->type) }}</td>
                                         <td class="text-end">

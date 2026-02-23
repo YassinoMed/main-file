@@ -14,6 +14,12 @@
         </div>
     @endif
 
+    <div class="row mb-3">
+        <div class="col-12">
+            <div id="collab-indicator" class="collab-indicator" data-collab-resource="report" data-collab-id="dashboard" data-collab-label="{{ __('Report Dashboard') }}"></div>
+        </div>
+    </div>
+
     @if(\Auth::user()->type != 'client' && \Auth::user()->type != 'company')
         <div class="row mt-5">
             <div class="col-lg-6">

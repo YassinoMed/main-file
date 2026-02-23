@@ -207,6 +207,8 @@ class FormBuilderController extends Controller
             {
                 $names = $request->name;
                 $types = $request->type;
+                $maxOrder = FormField::where('form_id', $formbuilder->id)->max('order');
+                $nextOrder = is_null($maxOrder) ? 0 : ((int)$maxOrder + 1);
 
                 foreach($names as $key => $value)
                 {
@@ -218,9 +220,11 @@ class FormBuilderController extends Controller
                                 'form_id' => $formbuilder->id,
                                 'name' => $value,
                                 'type' => $types[$key],
+                                'order' => $nextOrder,
                                 'created_by' => $usr->creatorId(),
                             ]
                         );
+                        $nextOrder++;
                     }
                 }
 
@@ -307,6 +311,38 @@ class FormBuilderController extends Controller
         else
         {
             return redirect()->back()->with('error', __('Permission denied.'));
+        }
+    }
+
+    public function fieldOrder($id, Request $request)
+    {
+        $usr = \Auth::user();
+        if($usr->can('manage form field'))
+        {
+            $form = FormBuilder::find($id);
+            if($form->created_by == $usr->creatorId())
+            {
+                $order = $request->order;
+                if(!is_array($order))
+                {
+                    return response()->json(['error' => __('Invalid order payload.')], 422);
+                }
+
+                foreach($order as $index => $fieldId)
+                {
+                    FormField::where('id', $fieldId)->where('form_id', $form->id)->update(['order' => $index]);
+                }
+
+                return response()->json(['success' => true]);
+            }
+            else
+            {
+                return response()->json(['error' => __('Permission Denied.')], 401);
+            }
+        }
+        else
+        {
+            return response()->json(['error' => __('Permission denied.')], 401);
         }
     }
 

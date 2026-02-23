@@ -198,6 +198,36 @@ body[data-module="pos"] {
     font-weight: 500;
     padding: 1.3rem 1.25rem;
 }
+.collab-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    border-radius: 10px;
+    background: var(--bs-body-bg, #ffffff);
+    color: var(--bs-body-color, #111827);
+}
+.collab-indicator .collab-label {
+    font-weight: 600;
+}
+.collab-indicator .collab-users {
+    color: #6b7280;
+}
+.global-undo-redo {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    display: flex;
+    gap: 8px;
+    z-index: 999;
+}
+.global-undo-redo .btn {
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+}
+.form-field-handle {
+    cursor: grab;
+}
 .faq .accordion .accordion-item .accordion-button span>i {
     font-size: 20px;
     margin-right: 8px;

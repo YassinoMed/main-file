@@ -1527,6 +1527,272 @@
         }
     }
 
+    function initCollaborationPresence() {
+        var indicator = document.querySelector('[data-collab-resource][data-collab-id]');
+        if (!indicator || typeof window.pusher === 'undefined') {
+            return;
+        }
+
+        var resource = indicator.getAttribute('data-collab-resource') || '';
+        var collabId = indicator.getAttribute('data-collab-id') || '';
+        if (!resource || !collabId) {
+            return;
+        }
+
+        var label = indicator.getAttribute('data-collab-label') || '';
+        var lang = (document.documentElement.getAttribute('lang') || '').toLowerCase();
+        var channelName = 'presence-collab-' + resource + '-' + collabId;
+        var channel = window.pusher.subscribe(channelName);
+        var membersById = {};
+
+        function namesFromMembers() {
+            var names = [];
+            Object.keys(membersById).forEach(function (key) {
+                if (membersById[key]) names.push(membersById[key]);
+            });
+            return names;
+        }
+
+        function renderIndicator(names) {
+            if (!names || !names.length) {
+                indicator.style.display = 'none';
+                indicator.innerHTML = '';
+                return;
+            }
+            var title = labelFor(lang, 'Édition en cours', 'Editing now');
+            var safeLabel = label ? escapeHtml(label) : '';
+            indicator.style.display = '';
+            indicator.innerHTML = '<span class="collab-label">' + title + (safeLabel ? ' • ' + safeLabel : '') + '</span>' +
+                '<span class="collab-users">' + escapeHtml(names.join(', ')) + '</span>';
+        }
+
+        function syncMembers(members) {
+            membersById = {};
+            if (members && members.each) {
+                members.each(function (member) {
+                    if (!member) return;
+                    var name = member.info && member.info.name ? member.info.name : member.id;
+                    membersById[member.id] = name;
+                });
+            }
+            renderIndicator(namesFromMembers());
+        }
+
+        channel.bind('pusher:subscription_succeeded', function (members) {
+            syncMembers(members);
+        });
+
+        channel.bind('pusher:member_added', function (member) {
+            if (!member) return;
+            var name = member.info && member.info.name ? member.info.name : member.id;
+            membersById[member.id] = name;
+            renderIndicator(namesFromMembers());
+        });
+
+        channel.bind('pusher:member_removed', function (member) {
+            if (!member) return;
+            delete membersById[member.id];
+            renderIndicator(namesFromMembers());
+        });
+    }
+
+    function initGlobalUndoRedo() {
+        var forms = document.querySelectorAll('form');
+        if (!forms || !forms.length) {
+            return;
+        }
+
+        var toolbarId = 'globalUndoRedo';
+        if (!document.getElementById(toolbarId)) {
+            var toolbar = document.createElement('div');
+            toolbar.id = toolbarId;
+            toolbar.className = 'global-undo-redo';
+            toolbar.innerHTML = '<button type="button" class="btn btn-light btn-sm" data-action="undo"><i class="ti ti-arrow-back-up"></i></button>' +
+                '<button type="button" class="btn btn-light btn-sm" data-action="redo"><i class="ti ti-arrow-forward-up"></i></button>';
+            document.body.appendChild(toolbar);
+        }
+
+        var toolbarEl = document.getElementById(toolbarId);
+        var historyKey = 'erpgo_form_history_' + window.location.pathname;
+        var historyState = readJsonStorage(historyKey, { undo: [], redo: [] });
+        if (!historyState || !Array.isArray(historyState.undo) || !Array.isArray(historyState.redo)) {
+            historyState = { undo: [], redo: [] };
+        }
+        var lastSignature = historyState.undo.length ? JSON.stringify(historyState.undo[historyState.undo.length - 1]) : '';
+        var isApplying = false;
+        var debounceTimer = null;
+
+        function saveState() {
+            writeJsonStorage(historyKey, historyState);
+            updateButtons();
+        }
+
+        function pushValue(target, key, value) {
+            if (typeof target[key] === 'undefined') {
+                target[key] = value;
+                return;
+            }
+            if (Array.isArray(target[key])) {
+                target[key].push(value);
+                return;
+            }
+            target[key] = [target[key], value];
+        }
+
+        function captureSnapshot() {
+            var formsData = [];
+            forms.forEach(function (form) {
+                var values = {};
+                var checks = {};
+                var elements = form.querySelectorAll('input, select, textarea');
+                elements.forEach(function (el) {
+                    if (!el.name) return;
+                    var type = (el.type || '').toLowerCase();
+                    if (type === 'password' || type === 'file') return;
+                    if (type === 'checkbox' || type === 'radio') {
+                        if (!checks[el.name]) checks[el.name] = [];
+                        checks[el.name].push({ value: el.value, checked: !!el.checked });
+                        return;
+                    }
+                    if (el.tagName && el.tagName.toLowerCase() === 'select' && el.multiple) {
+                        var selected = [];
+                        Array.prototype.forEach.call(el.options, function (opt) {
+                            if (opt.selected) selected.push(opt.value);
+                        });
+                        values[el.name] = selected;
+                        return;
+                    }
+                    pushValue(values, el.name, el.value);
+                });
+                formsData.push({ values: values, checks: checks });
+            });
+            return { forms: formsData };
+        }
+
+        function applySnapshot(snapshot) {
+            if (!snapshot || !snapshot.forms) return;
+            isApplying = true;
+            snapshot.forms.forEach(function (formSnap, index) {
+                var form = forms[index];
+                if (!form) return;
+                var values = formSnap.values || {};
+                var checks = formSnap.checks || {};
+                var used = {};
+                var elements = form.querySelectorAll('input, select, textarea');
+                elements.forEach(function (el) {
+                    if (!el.name) return;
+                    var type = (el.type || '').toLowerCase();
+                    if (type === 'password' || type === 'file') return;
+                    if (type === 'checkbox' || type === 'radio') {
+                        var list = checks[el.name] || [];
+                        var matched = null;
+                        for (var i = 0; i < list.length; i++) {
+                            if (String(list[i].value) === String(el.value)) {
+                                matched = list[i];
+                                break;
+                            }
+                        }
+                        el.checked = matched ? !!matched.checked : false;
+                        return;
+                    }
+                    if (el.tagName && el.tagName.toLowerCase() === 'select' && el.multiple) {
+                        var selVals = values[el.name];
+                        if (!Array.isArray(selVals)) selVals = selVals != null ? [selVals] : [];
+                        Array.prototype.forEach.call(el.options, function (opt) {
+                            opt.selected = selVals.indexOf(opt.value) !== -1;
+                        });
+                        return;
+                    }
+                    var val = values[el.name];
+                    if (Array.isArray(val)) {
+                        var idx = used[el.name] || 0;
+                        el.value = val[idx] != null ? val[idx] : '';
+                        used[el.name] = idx + 1;
+                        return;
+                    }
+                    el.value = val != null ? val : '';
+                });
+            });
+            isApplying = false;
+        }
+
+        function recordSnapshot() {
+            if (isApplying) return;
+            var snap = captureSnapshot();
+            var signature = JSON.stringify(snap);
+            if (signature === lastSignature) return;
+            historyState.undo.push(snap);
+            if (historyState.undo.length > 20) historyState.undo.shift();
+            historyState.redo = [];
+            lastSignature = signature;
+            saveState();
+        }
+
+        function updateButtons() {
+            var undoBtn = toolbarEl.querySelector('[data-action="undo"]');
+            var redoBtn = toolbarEl.querySelector('[data-action="redo"]');
+            if (undoBtn) undoBtn.disabled = historyState.undo.length < 2;
+            if (redoBtn) redoBtn.disabled = historyState.redo.length === 0;
+        }
+
+        function undo() {
+            if (historyState.undo.length < 2) return;
+            var current = historyState.undo.pop();
+            historyState.redo.push(current);
+            var prev = historyState.undo[historyState.undo.length - 1];
+            lastSignature = JSON.stringify(prev);
+            applySnapshot(prev);
+            saveState();
+        }
+
+        function redo() {
+            if (!historyState.redo.length) return;
+            var next = historyState.redo.pop();
+            historyState.undo.push(next);
+            lastSignature = JSON.stringify(next);
+            applySnapshot(next);
+            saveState();
+        }
+
+        toolbarEl.addEventListener('click', function (e) {
+            var target = e.target;
+            var btn = target && target.closest ? target.closest('[data-action]') : null;
+            if (!btn) return;
+            var action = btn.getAttribute('data-action');
+            if (action === 'undo') undo();
+            if (action === 'redo') redo();
+        });
+
+        document.addEventListener('keydown', function (e) {
+            var key = (e.key || '').toLowerCase();
+            var isUndo = (e.ctrlKey || e.metaKey) && !e.shiftKey && key === 'z';
+            var isRedo = (e.ctrlKey || e.metaKey) && (key === 'y' || (e.shiftKey && key === 'z'));
+            if (!isUndo && !isRedo) return;
+            var active = document.activeElement;
+            var isEditable = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+            if (isEditable) return;
+            e.preventDefault();
+            if (isUndo) undo();
+            if (isRedo) redo();
+        });
+
+        var onInput = function () {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function () {
+                recordSnapshot();
+            }, 400);
+        };
+
+        forms.forEach(function (form) {
+            form.addEventListener('input', onInput);
+            form.addEventListener('change', onInput);
+        });
+
+        setTimeout(function () {
+            recordSnapshot();
+        }, 300);
+    }
+
     // ==========================================
     // INIT ALL
     // ==========================================
@@ -1545,6 +1811,8 @@
         initBatchActions();
         initKeyboardShortcuts();
         initFormAutosave();
+        initCollaborationPresence();
+        initGlobalUndoRedo();
         initPWA();
     });
 })();

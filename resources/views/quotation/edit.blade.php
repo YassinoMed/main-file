@@ -433,6 +433,9 @@
 
 @section('content')
     <div class="row">
+        <div class="col-12 mb-3">
+            <div id="collab-indicator" class="collab-indicator" data-collab-resource="quotation" data-collab-id="{{ $quotation->id }}" data-collab-label="{{ $quotation_number }}"></div>
+        </div>
 
         {{ Form::model($quotation, array('route' => array('quotation.update', $quotation->id), 'method' => 'PUT','class'=>'w-100', 'class'=>'needs-validation', 'novalidate')) }}
         <div class="col-12">
@@ -620,4 +623,3 @@
         {{ Form::close() }}
     </div>
 @endsection
-
